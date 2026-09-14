@@ -1,0 +1,6 @@
+name = "zhiwo-pages"
+compatibility_date = "2026-09-14"
+pages_build_output_dir = "dist"
+
+[vars]
+ARK_MODEL = "doubao-seed-2-0-lite-260428"
