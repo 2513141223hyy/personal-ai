@@ -4,6 +4,7 @@ import {
   UserRound,
   FolderOpen,
   Send,
+  Mic,
   Upload,
   Check,
   Trash2,
@@ -16,6 +17,7 @@ const icons = {
     UserRound,
     FolderOpen,
     Send,
+    Mic,
     Upload,
     Check,
     Trash2,
@@ -39,6 +41,8 @@ const icons = {
 let state = { messages: [], observations: [], facts: [], documents: [] },
   view = "chat",
   sending = false;
+let recognition = null,
+  listening = false;
 const $ = (id) => document.getElementById(id),
   esc = (s) =>
     String(s || "").replace(
@@ -78,10 +82,42 @@ function chat() {
   $("eyebrow").textContent = "CONVERSATION";
   $("title").textContent = "和自己聊一会儿";
   $("content").innerHTML =
-    `<section class="chat"><div class="messages">${state.messages.length ? state.messages.map((m) => `<article class="message ${m.role}"><span>${m.role === "user" ? "你" : "知我"}</span><div>${fmt(m.content)}</div></article>`).join("") : `<div class="empty"><b>从一句真实的话开始</b><p>可以说说你正在做的事、最近在意的问题，或一个反复出现的想法。你的原话会成为分析依据。</p></div>`}</div><form id="chat-form"><textarea id="chat-input" rows="1" placeholder="记录想法或提出问题" maxlength="10000"></textarea><button aria-label="发送" ${sending ? "disabled" : ""}>${icon("Send")}</button></form><p class="note">AI 观察仅用于自我了解，不构成心理或医疗诊断。</p></section>`;
+    `<section class="chat"><div class="messages">${state.messages.length ? state.messages.map((m) => `<article class="message ${m.role}"><span>${m.role === "user" ? "你" : "知我"}</span><div>${fmt(m.content)}</div></article>`).join("") : `<div class="empty"><b>从一句真实的话开始</b><p>可以说说你正在做的事、最近在意的问题，或一个反复出现的想法。你的原话会成为分析依据。</p></div>`}</div><form id="chat-form"><textarea id="chat-input" rows="1" enterkeyhint="send" placeholder="记录想法或提出问题" maxlength="10000"></textarea><button class="voice-button${listening ? " listening" : ""}" id="voice-button" aria-label="${listening ? "停止语音输入" : "语音输入"}" type="button">${icon("Mic")}</button><button aria-label="发送" type="submit" ${sending ? "disabled" : ""}>${icon("Send")}</button></form><p class="note">AI 观察仅用于自我了解，不构成心理或医疗诊断。</p></section>`;
   const box = document.querySelector(".messages");
   box.scrollTop = box.scrollHeight;
   $("chat-form").onsubmit = sendChat;
+  $("voice-button").onclick = toggleVoice;
+  $("chat-input").onkeydown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      e.currentTarget.form.requestSubmit();
+    }
+  };
+}
+function toggleVoice() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    showToast([], "当前浏览器不支持语音输入，请使用最新版 Safari 或 Chrome");
+    return;
+  }
+  if (listening) {
+    recognition?.stop();
+    return;
+  }
+  recognition = new SpeechRecognition();
+  recognition.lang = "zh-CN";
+  recognition.interimResults = true;
+  recognition.continuous = false;
+  const input = $("chat-input");
+  const base = input.value.trim();
+  recognition.onresult = (event) => {
+    const transcript = Array.from(event.results).map((r) => r[0].transcript).join("");
+    input.value = base ? `${base} ${transcript}` : transcript;
+  };
+  recognition.onstart = () => { listening = true; chat(); $("chat-input")?.focus(); };
+  recognition.onend = () => { listening = false; if ($("voice-button")) chat(); };
+  recognition.onerror = () => { listening = false; showToast([], "语音输入未完成，请检查麦克风权限"); chat(); };
+  recognition.start();
 }
 async function sendChat(e) {
   e.preventDefault();
